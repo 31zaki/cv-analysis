@@ -1,9 +1,8 @@
 import os
 import re
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from src.core.data_loader import load_curve
 from src.core.baseline import compute_baseline
@@ -21,7 +20,8 @@ def _paper_cv_figure(v, current, baseline, pts, peak_ox, peak_red):
     Shows the curve and baseline lines only — NO selection point markers.
     """
     i1, i2, i3, i4 = pts
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig = Figure(figsize=(8, 5))
+    ax = fig.add_subplot(111)
     ax.plot(v, current, color="black", linewidth=1.6, label="CV Curve")
     ax.plot(v[i1:i2 + 1], baseline[i1:i2 + 1],
             color="#1565C0", linestyle="--", linewidth=1.4, label="Baseline")
@@ -40,7 +40,8 @@ def _paper_peaks_figure(v, diff, peak_ox, peak_red):
     t_idx = np.linspace(0, len(v) - 1, n_t, dtype=int)
     t_lbl = [f"{v[i]:.2f}" for i in t_idx]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig = Figure(figsize=(8, 5))
+    ax = fig.add_subplot(111)
     ax.plot(diff, color="black", linewidth=1.6)
     ax.axhline(0, color="#888888", linewidth=0.8, linestyle="--")
     ax.annotate(
@@ -69,7 +70,8 @@ def _screen_cv_figure(v, current, baseline, pts):
     """Screen figure: CV + baseline with selection point markers (Ayu style)."""
     apply_mpl_style()
     i1, i2, i3, i4 = pts
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig = Figure(figsize=(8, 5))
+    ax = fig.add_subplot(111)
     ax.plot(v, current, color=PLOT_COLORS[1], linewidth=1.8, label="CV Curve")
     ax.scatter(v[[i1, i2, i3, i4]], current[[i1, i2, i3, i4]],
                color=PLOT_COLORS[3], zorder=5, s=60, label="Baseline points")
@@ -91,7 +93,8 @@ def _screen_peaks_figure(v, diff, peak_ox, peak_red):
     t_idx = np.linspace(0, len(v) - 1, n_t, dtype=int)
     t_lbl = [f"{v[i]:.2f}" for i in t_idx]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig = Figure(figsize=(8, 5))
+    ax = fig.add_subplot(111)
     ax.plot(diff, color=PLOT_COLORS[1], linewidth=1.8)
     ax.axhline(0, color="#707A8C", linewidth=0.8, linestyle="--")
     ax.annotate(

@@ -160,14 +160,24 @@ class BasePanel(QWidget):
         self.log.clear()
 
     # ── Plot management ──────────────────────────────────────────────────────
+    def _close_tab_figures(self):
+        """Close matplotlib figures held by current tabs to free memory."""
+        import matplotlib.pyplot as plt
+        for i in range(self.plot_tabs.count()):
+            w = self.plot_tabs.widget(i)
+            if w is not None and hasattr(w, "figure") and w.figure is not None:
+                plt.close(w.figure)
+
     def show_figures(self, figures: list):
         """figures: list of (matplotlib.Figure, title_str)"""
+        self._close_tab_figures()
         self.plot_tabs.clear()
         for fig, title in figures:
             canvas = PlotCanvas(fig)
             self.plot_tabs.addTab(canvas, title)
 
     def clear_plots(self):
+        self._close_tab_figures()
         self.plot_tabs.clear()
 
     # ── Thread helpers ───────────────────────────────────────────────────────

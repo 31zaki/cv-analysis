@@ -2,9 +2,8 @@ import os
 import re
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from src.ui.theme import apply_mpl_style, save_for_paper, PLOT_COLORS
 
@@ -80,7 +79,8 @@ def run(csv_path, reaction_type="Click Chemistry",
         os.makedirs(out, exist_ok=True)
         for pfig, stem in _make_paper_figures(graft, react, eff, reaction_type, stats):
             save_for_paper(pfig, os.path.join(out, f"{_sanitize(reaction_type)}_{stem}.png"))
-            plt.close(pfig)
+            pfig.clf()
+            plt.close("all")
 
     return {"stats": stats, "dataframe": df_v, "figures": screen_figs}
 
@@ -93,7 +93,8 @@ def _make_screen_figures(graft, react, eff, label, stats):
     fit   = np.poly1d(np.polyfit(graft, react, 1))
     x_fit = np.linspace(graft.min(), graft.max(), 200)
 
-    fig1, ax1 = plt.subplots(figsize=(8, 5))
+    fig1 = Figure(figsize=(8, 5))
+    ax1 = fig1.add_subplot(111)
     ax1.scatter(graft, react, color=PLOT_COLORS[1], s=60, zorder=5, label="Devices")
     ax1.plot(x_fit, fit(x_fit), color=PLOT_COLORS[0], lw=1.5, ls="--", label="Linear fit")
     ax1.set_xlabel("Grafting Charge (nC)", fontsize=13)
@@ -105,7 +106,8 @@ def _make_screen_figures(graft, react, eff, label, stats):
     fig1.tight_layout()
     figs.append((fig1, "Grafting vs Reaction"))
 
-    fig2, ax2 = plt.subplots(figsize=(6, 6))
+    fig2 = Figure(figsize=(6, 6))
+    ax2 = fig2.add_subplot(111)
     ax2.boxplot(eff, vert=True, patch_artist=True,
                 boxprops=dict(facecolor=PLOT_COLORS[1] + "55", edgecolor=PLOT_COLORS[1]),
                 medianprops=dict(color=PLOT_COLORS[0], linewidth=2),
@@ -130,7 +132,8 @@ def _make_paper_figures(graft, react, eff, label, stats):
     fit   = np.poly1d(np.polyfit(graft, react, 1))
     x_fit = np.linspace(graft.min(), graft.max(), 200)
 
-    fig1, ax1 = plt.subplots(figsize=(8, 5))
+    fig1 = Figure(figsize=(8, 5))
+    ax1 = fig1.add_subplot(111)
     ax1.scatter(graft, react, color="#1565C0", s=60, zorder=5, label="Devices")
     ax1.plot(x_fit, fit(x_fit), color="#C07000", lw=1.5, ls="--", label="Linear fit")
     ax1.set_xlabel("Grafting Charge (nC)", fontsize=13)
@@ -142,7 +145,8 @@ def _make_paper_figures(graft, react, eff, label, stats):
     fig1.tight_layout()
     yield fig1, "grafting_vs_reaction"
 
-    fig2, ax2 = plt.subplots(figsize=(6, 6))
+    fig2 = Figure(figsize=(6, 6))
+    ax2 = fig2.add_subplot(111)
     ax2.boxplot(eff, vert=True, patch_artist=True,
                 boxprops=dict(facecolor="#BBDEFB", edgecolor="#1565C0"),
                 medianprops=dict(color="#C62828", linewidth=2),

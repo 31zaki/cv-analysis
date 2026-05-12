@@ -1,9 +1,8 @@
 import os
 import re
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from src.core.data_loader import load_curve, parse_scan_filename
 from src.core.baseline import compute_baseline
@@ -75,7 +74,8 @@ def _make_screen_figures(records):
     nc = len(PLOT_COLORS)
     figs = []
 
-    fig1, ax1 = plt.subplots(figsize=(9, 5))
+    fig1 = Figure(figsize=(9, 5))
+    ax1 = fig1.add_subplot(111)
     for i, r in enumerate(records):
         ax1.plot(r["voltage"], r["current"], color=PLOT_COLORS[i % nc],
                  linewidth=1.6, label=f"{r['rate']} mV/s")
@@ -87,7 +87,8 @@ def _make_screen_figures(records):
     t_idx = np.linspace(0, len(v_ref) - 1, 5, dtype=int)
     t_lbl = [f"{v_ref[j]:.2f}" for j in t_idx]
 
-    fig2, ax2 = plt.subplots(figsize=(9, 5))
+    fig2 = Figure(figsize=(9, 5))
+    ax2 = fig2.add_subplot(111)
     for i, r in enumerate(records):
         ax2.plot(r["diff"], color=PLOT_COLORS[i % nc], linewidth=1.6, label=f"{r['rate']} mV/s")
     ax2.set_xticks(t_idx); ax2.set_xticklabels(t_lbl)
@@ -95,7 +96,8 @@ def _make_screen_figures(records):
     ax2.legend(fontsize=10); fig2.tight_layout()
     figs.append((fig2, "Baseline-Subtracted"))
 
-    fig3, ax3 = plt.subplots(figsize=(8, 5))
+    fig3 = Figure(figsize=(8, 5))
+    ax3 = fig3.add_subplot(111)
     rates = np.array([r["rate"] for r in records], dtype=float)
     ox_v  = [r["peak_ox"][1]  for r in records]
     red_v = [r["peak_red"][1] for r in records]
@@ -116,7 +118,8 @@ def _make_paper_figures(records):
     nc = 8
     _PAPER_COLORS = ["#1f77b4","#d62728","#2ca02c","#ff7f0e","#9467bd","#8c564b","#e377c2","#17becf"]
 
-    fig1, ax1 = plt.subplots(figsize=(8, 5))
+    fig1 = Figure(figsize=(8, 5))
+    ax1 = fig1.add_subplot(111)
     for i, r in enumerate(records):
         ax1.plot(r["voltage"], r["current"], color=_PAPER_COLORS[i % nc],
                  linewidth=1.6, label=f"{r['rate']} mV/s")
@@ -128,7 +131,8 @@ def _make_paper_figures(records):
     t_idx = np.linspace(0, len(v_ref) - 1, 5, dtype=int)
     t_lbl = [f"{v_ref[j]:.2f}" for j in t_idx]
 
-    fig2, ax2 = plt.subplots(figsize=(8, 5))
+    fig2 = Figure(figsize=(8, 5))
+    ax2 = fig2.add_subplot(111)
     for i, r in enumerate(records):
         ax2.plot(r["diff"], color=_PAPER_COLORS[i % nc], linewidth=1.6, label=f"{r['rate']} mV/s")
     ax2.set_xticks(t_idx); ax2.set_xticklabels(t_lbl)
@@ -140,7 +144,8 @@ def _make_paper_figures(records):
     ox_v  = [r["peak_ox"][1]  for r in records]
     red_v = [r["peak_red"][1] for r in records]
 
-    fig3, ax3 = plt.subplots(figsize=(8, 5))
+    fig3 = Figure(figsize=(8, 5))
+    ax3 = fig3.add_subplot(111)
     ax3.plot(rates, ox_v,  "o", color="#1565C0", label="Oxidation", markersize=7)
     ax3.plot(rates, red_v, "s", color="#C62828", label="Reduction", markersize=7)
     ax3.plot(rates, np.poly1d(np.polyfit(rates, ox_v,  1))(rates), "--", color="#1565C0", lw=1.2)

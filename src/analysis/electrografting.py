@@ -2,9 +2,8 @@ import os
 import re
 import math
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from src.core.data_loader import load_all_curves
 from src.ui.theme import apply_mpl_style, save_for_paper, PLOT_COLORS
@@ -54,7 +53,8 @@ def run(data_dir, max_cycles=3, experiment_type="electrografting", base_output_d
 
 def _single_fig(curves, label, paper=False):
     colors = _PAPER_COLORS if paper else PLOT_COLORS
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig = Figure(figsize=(8, 5))
+    ax = fig.add_subplot(111)
     for i, (v, c) in enumerate(curves):
         lbl = _CYCLE_LABELS[i] if i < len(_CYCLE_LABELS) else f"Cycle {i + 1}"
         ax.plot(np.asarray(v, dtype=float), np.asarray(c, dtype=float),
@@ -74,7 +74,8 @@ def _grid_figure(per_file):
     cols = min(3, len(valid))
     rows = math.ceil(len(valid) / cols)
     apply_mpl_style()
-    grid_fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
+    grid_fig = Figure(figsize=(6 * cols, 4 * rows))
+    axes = grid_fig.subplots(rows, cols, squeeze=False)
     for i, r in enumerate(valid):
         row, col = divmod(i, cols)
         ax = axes[row][col]

@@ -1,7 +1,9 @@
 """
 Interactive matplotlib canvas for baseline point selection.
-  Left-click  → snap to nearest data point (up to 4)
-  Right-click → undo last point
+
+  Left-click  → snap to nearest data point in 2D (x+y),
+                constrained to indices AFTER the last selected point
+  Right-click → undo last selection
 """
 import numpy as np
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
@@ -9,20 +11,25 @@ from PyQt5.QtCore import pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 
-from src.ui.theme import apply_mpl_style, BLUE, ACCENT, ORANGE, GREEN, RED, TEXT_DIM
+from src.ui.theme import apply_mpl_style, BLUE, ACCENT, ORANGE, GREEN, TEXT_DIM, BORDER
 
-# Colors / labels for the 4 baseline points
 _PT_COLORS = [ACCENT, ACCENT, ORANGE, ORANGE]
 _PT_LABELS = ["P1  (ox start)", "P2  (ox end)", "P3  (red start)", "P4  (red end)"]
-_MAX_PTS = 4
+_MAX_PTS   = 4
 
 
 class InteractiveCanvas(QWidget):
     """
-    Embeddable canvas with:
-    - set_data(voltage, current) to load CV
-    - set_selection_mode(bool) to toggle click-to-select
-    - points_changed signal emits list[int] (indices into voltage array)
+    CV canvas with click-to-select baseline points.
+
+    Rules enforced:
+    - Indices are always strictly increasing  (P1 < P2 < P3 < P4)
+    - Snapping uses 2D normalised distance so clicking on one branch
+      of the CV loop cannot accidentally snap to the other branch
+      at the same voltage.
+    - P1/P2 live on the forward scan; P3/P4 on the return scan,
+      naturally, because the index constraint propagates from the
+      user's earlier choices.
     """
     points_changed = pyqtSignal(list)
 
@@ -78,40 +85,62 @@ class InteractiveCanvas(QWidget):
     def selected_indices(self) -> list[int]:
         return self._indices.copy()
 
-    # ── Internals ─────────────────────────────────────────────────────────────
-    def _exit_toolbar_mode(self):
-        """Deactivate zoom/pan if either is currently active."""
-        mode = getattr(self.toolbar, "mode", "")
-        if "zoom" in str(mode).lower():
-            self.toolbar.zoom()
-        elif "pan" in str(mode).lower():
-            self.toolbar.pan()
-
+    # ── Click handler ─────────────────────────────────────────────────────────
     def _on_click(self, event):
         if not self._selection_mode:
             return
         if event.inaxes is None or self._voltage is None:
             return
-        if self.toolbar.mode:       # skip when zoom / pan active
+        if self.toolbar.mode:           # zoom / pan active — don't interfere
             return
 
-        if event.button == 1:       # left-click → add point
+        if event.button == 1:           # left-click → add point
             if len(self._indices) >= _MAX_PTS:
                 return
-            idx = int(np.argmin(np.abs(self._voltage - event.xdata)))
-            if idx not in self._indices:
+
+            idx = self._nearest_index(event.xdata, event.ydata)
+            if idx is not None and idx not in self._indices:
                 self._indices.append(idx)
                 self._draw()
                 self.points_changed.emit(self._indices.copy())
                 if len(self._indices) == _MAX_PTS:
                     self.set_selection_mode(False)
 
-        elif event.button == 3:     # right-click → undo last
+        elif event.button == 3:         # right-click → undo
             if self._indices:
                 self._indices.pop()
                 self._draw()
                 self.points_changed.emit(self._indices.copy())
 
+    def _nearest_index(self, x_click: float, y_click: float) -> int | None:
+        """
+        Find the nearest data point using 2D normalised Euclidean distance.
+        Only candidates with index STRICTLY GREATER than the last selected
+        index are considered, enforcing ascending order.
+        """
+        v, c = self._voltage, self._current
+
+        v_range = v.max() - v.min()
+        c_range = c.max() - c.min()
+        if v_range == 0 or c_range == 0:
+            return None
+
+        # Normalise to [0, 1]
+        vn = (v - v.min()) / v_range
+        cn = (c - c.min()) / c_range
+        xn = (x_click - v.min()) / v_range
+        yn = (y_click - c.min()) / c_range
+
+        dist = np.sqrt((vn - xn) ** 2 + (cn - yn) ** 2)
+
+        # Mask out already-passed indices (enforce strictly increasing order)
+        if self._indices:
+            dist[: self._indices[-1] + 1] = np.inf
+
+        best = int(np.argmin(dist))
+        return None if np.isinf(dist[best]) else best
+
+    # ── Drawing ───────────────────────────────────────────────────────────────
     def _draw(self):
         apply_mpl_style()
         self.figure.clear()
@@ -126,51 +155,57 @@ class InteractiveCanvas(QWidget):
             self.canvas.draw()
             return
 
-        # ── CV curve ──────────────────────────────────────────────────────────
-        ax.plot(self._voltage, self._current, color=BLUE,
-                linewidth=1.8, label="CV Curve", zorder=2)
+        v, c = self._voltage, self._current
+        n_sel = len(self._indices)
 
-        # ── Selected points ───────────────────────────────────────────────────
+        # ── CV curve: dim passed region, highlight selectable region ──────────
+        split = self._indices[-1] + 1 if self._indices else 0
+
+        if self._selection_mode and n_sel > 0:
+            # Already-chosen section: dimmed
+            ax.plot(v[:split], c[:split],
+                    color=TEXT_DIM, linewidth=1.2, alpha=0.35, zorder=1)
+            # Still-selectable section: bright
+            ax.plot(v[split:], c[split:],
+                    color=BLUE, linewidth=2.0, zorder=2, label="CV Curve")
+        else:
+            ax.plot(v, c, color=BLUE, linewidth=1.8, zorder=2, label="CV Curve")
+
+        # ── Selected point markers ────────────────────────────────────────────
         for i, idx in enumerate(self._indices):
             col = _PT_COLORS[i]
-            ax.axvline(self._voltage[idx], color=col,
-                       alpha=0.45, linewidth=1.1, linestyle=":")
-            ax.scatter([self._voltage[idx]], [self._current[idx]],
-                       color=col, s=90, zorder=7,
-                       label=f"{_PT_LABELS[i]}\n    {self._voltage[idx]:.3f} V  (idx {idx})")
+            ax.axvline(v[idx], color=col, alpha=0.40, linewidth=1.0, linestyle=":")
+            ax.scatter([v[idx]], [c[idx]], color=col, s=90, zorder=7,
+                       label=f"{_PT_LABELS[i]}  ({v[idx]:.3f} V, idx {idx})")
 
-        # ── Live baseline segment 1 (after points 1 & 2) ─────────────────────
-        if len(self._indices) >= 2:
+        # ── Live baseline segment 1 (P1→P2) ──────────────────────────────────
+        if n_sel >= 2:
             ia, ib = self._indices[0], self._indices[1]
-            ax.plot(self._voltage[ia:ib + 1],
-                    self._linear_seg(ia, ib),
-                    color=ACCENT, linestyle="--", linewidth=1.6,
-                    alpha=0.9, zorder=3)
+            ax.plot(v[ia:ib + 1], self._seg(ia, ib),
+                    color=ACCENT, linestyle="--", linewidth=1.6, alpha=0.9,
+                    label="Baseline seg 1", zorder=3)
 
-        # ── Live baseline segment 2 (after all 4 points) ─────────────────────
-        if len(self._indices) == 4:
+        # ── Live baseline segment 2 (P3→P4) ──────────────────────────────────
+        if n_sel == 4:
             ic, id_ = self._indices[2], self._indices[3]
-            ax.plot(self._voltage[ic:id_ + 1],
-                    self._linear_seg(ic, id_),
-                    color=ORANGE, linestyle="--", linewidth=1.6,
-                    alpha=0.9, zorder=3)
+            ax.plot(v[ic:id_ + 1], self._seg(ic, id_),
+                    color=ORANGE, linestyle="--", linewidth=1.6, alpha=0.9,
+                    label="Baseline seg 2", zorder=3)
 
-        # ── Title / hint ──────────────────────────────────────────────────────
-        n = len(self._indices)
+        # ── Title hint ────────────────────────────────────────────────────────
         if self._selection_mode:
             ax.set_title(
-                f"Click to select point {n + 1} / {_MAX_PTS}   ·   Right-click to undo",
+                f"Click point {n_sel + 1} / {_MAX_PTS}  on the bright curve  "
+                f"·  Right-click to undo",
                 color=ACCENT, fontsize=11, pad=6,
             )
-        elif n > 0 and n < _MAX_PTS:
+        elif n_sel == _MAX_PTS:
+            ax.set_title("✓  4 points selected  —  click Run Analysis",
+                         color=GREEN, fontsize=11, pad=6)
+        elif n_sel > 0:
             ax.set_title(
-                f"{n} / {_MAX_PTS} points selected  —  press 'Select Points' to continue",
+                f"{n_sel} / {_MAX_PTS} points  —  click 'Select Points' to continue",
                 color=TEXT_DIM, fontsize=11, pad=6,
-            )
-        elif n == _MAX_PTS:
-            ax.set_title(
-                "✓  4 baseline points selected  —  click 'Run Analysis'",
-                color=GREEN, fontsize=11, pad=6,
             )
 
         ax.set_xlabel("Potential (V)", fontsize=13)
@@ -181,8 +216,15 @@ class InteractiveCanvas(QWidget):
         self.figure.tight_layout()
         self.canvas.draw()
 
-    def _linear_seg(self, ia: int, ib: int) -> np.ndarray:
+    def _seg(self, ia: int, ib: int) -> np.ndarray:
         v, c = self._voltage, self._current
         dv = v[ib] - v[ia]
         slope = (c[ib] - c[ia]) / dv if dv != 0 else 0.0
         return c[ia] + slope * (v[ia:ib + 1] - v[ia])
+
+    def _exit_toolbar_mode(self):
+        mode = str(getattr(self.toolbar, "mode", "")).lower()
+        if "zoom" in mode:
+            self.toolbar.zoom()
+        elif "pan" in mode:
+            self.toolbar.pan()

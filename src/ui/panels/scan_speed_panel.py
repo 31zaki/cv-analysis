@@ -130,6 +130,8 @@ class ScanSpeedPanel(BasePanel):
         self._update_output_preview()
 
     def _update_output_preview(self):
+        if not hasattr(self, "_base_dir_edit") or not hasattr(self, "_out_preview"):
+            return
         base   = self._base_dir_edit.text().strip()
         device = self._device_edit.text().strip() or "device"
         preset = self._preset_combo.currentText()

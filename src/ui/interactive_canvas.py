@@ -5,13 +5,16 @@ Interactive matplotlib canvas for baseline point selection.
                 constrained to indices AFTER the last selected point
   Right-click → undo last selection
 """
+import os
 import numpy as np
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QSizePolicy
+)
+from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 
-from src.ui.theme import apply_mpl_style, BLUE, ACCENT, ORANGE, GREEN, TEXT_DIM, BORDER
+from src.ui.theme import apply_mpl_style, save_for_paper, BLUE, ACCENT, ORANGE, GREEN, TEXT_DIM, BORDER
 
 _PT_COLORS = [ACCENT, ACCENT, ORANGE, ORANGE]
 _PT_LABELS = ["P1  (ox start)", "P2  (ox end)", "P3  (red start)", "P4  (red end)"]
@@ -48,10 +51,24 @@ class InteractiveCanvas(QWidget):
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
         self.toolbar.setMaximumHeight(36)
 
+        self._export_btn = QPushButton("Export for Paper")
+        self._export_btn.setObjectName("SecondaryBtn")
+        self._export_btn.setFixedHeight(28)
+        self._export_btn.setToolTip(
+            "Save a white-background, print-safe version of this figure (600 dpi)"
+        )
+        self._export_btn.clicked.connect(self._export_paper)
+
+        toolbar_row = QHBoxLayout()
+        toolbar_row.setContentsMargins(0, 0, 4, 0)
+        toolbar_row.setSpacing(0)
+        toolbar_row.addWidget(self.toolbar, stretch=1)
+        toolbar_row.addWidget(self._export_btn)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self.toolbar)
+        layout.addLayout(toolbar_row)
         layout.addWidget(self.canvas)
 
         self._cid = self.canvas.mpl_connect("button_press_event", self._on_click)
@@ -221,6 +238,27 @@ class InteractiveCanvas(QWidget):
         dv = v[ib] - v[ia]
         slope = (c[ib] - c[ia]) / dv if dv != 0 else 0.0
         return c[ia] + slope * (v[ia:ib + 1] - v[ia])
+
+    def _export_paper(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Figure for Paper",
+            os.path.expanduser("~/cv_preview.png"),
+            "PNG Image (*.png);;PDF Vector (*.pdf);;SVG Vector (*.svg)",
+        )
+        if not path:
+            return
+        try:
+            dpi = 600 if path.lower().endswith(".png") else 300
+            save_for_paper(self.figure, path, dpi=dpi)
+            self._export_btn.setText("✓ Saved")
+            self._export_btn.setStyleSheet("color: #A6CC70; border-color: #A6CC70;")
+            QTimer.singleShot(2000, lambda: (
+                self._export_btn.setText("Export for Paper"),
+                self._export_btn.setStyleSheet(""),
+            ))
+        except Exception as e:
+            self._export_btn.setText(f"Error: {e}")
+            QTimer.singleShot(3000, lambda: self._export_btn.setText("Export for Paper"))
 
     def _exit_toolbar_mode(self):
         mode = str(getattr(self.toolbar, "mode", "")).lower()

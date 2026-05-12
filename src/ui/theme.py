@@ -1,5 +1,6 @@
 """Ayu Mirage color palette, QSS stylesheet, and matplotlib theme."""
 from cycler import cycler
+import os
 
 # ── Palette ─────────────────────────────────────────────────────────────────
 BG_DEEP   = "#1A1F29"
@@ -428,3 +429,167 @@ NavigationToolbar2QT QToolButton:checked {{
     color: {ACCENT};
 }}
 """
+
+# ── Paper-export color map: Ayu Mirage → print-friendly darks ───────────────
+# Keys are lowercase hex; values are darker equivalents readable on white.
+_PAPER_COLOR_MAP: dict[str, str] = {
+    "#73d0ff": "#1565C0",   # BLUE       → dark blue
+    "#ffcc66": "#C07000",   # ACCENT     → dark amber
+    "#a6cc70": "#2E7D32",   # GREEN      → dark green
+    "#f07178": "#C62828",   # RED        → dark red
+    "#ffb454": "#E65100",   # ORANGE     → burnt orange
+    "#d4bfff": "#6A1B9A",   # PURPLE     → dark purple
+    "#5ccfe6": "#00838F",   # CYAN       → dark teal
+    "#bae67e": "#558B2F",   # LIME       → dark lime
+}
+
+
+def _paper_color(c) -> str:
+    """Map an Ayu screen color to its paper-export equivalent."""
+    import matplotlib.colors as mcolors
+    try:
+        rgba = mcolors.to_rgba(c)
+        hex_c = mcolors.to_hex(rgba).lower()
+        return _PAPER_COLOR_MAP.get(hex_c, hex_c)
+    except Exception:
+        return c
+
+
+def _capture(ax) -> dict:
+    """Snapshot all color/style properties of an Axes for later restore."""
+    xticks = ax.xaxis.get_major_ticks()
+    yticks = ax.yaxis.get_major_ticks()
+    state = {
+        "facecolor":    ax.get_facecolor(),
+        "xlabel_color": ax.xaxis.label.get_color(),
+        "ylabel_color": ax.yaxis.label.get_color(),
+        "title_color":  ax.title.get_color(),
+        "xtick_color":  xticks[0].tick1line.get_color() if xticks else TEXT,
+        "ytick_color":  yticks[0].tick1line.get_color() if yticks else TEXT,
+        "xticklab_color": xticks[0].label1.get_color() if xticks else TEXT,
+        "yticklab_color": yticks[0].label1.get_color() if yticks else TEXT,
+        "spines":       {k: (v.get_edgecolor(), v.get_linewidth())
+                         for k, v in ax.spines.items()},
+        "gridlines":    [(gl, gl.get_color(), gl.get_alpha(), gl.get_linewidth())
+                         for gl in ax.xaxis.get_gridlines() + ax.yaxis.get_gridlines()],
+        "lines":        [(ln, ln.get_color(), ln.get_linewidth()) for ln in ax.lines],
+        "collections":  [(col, col.get_facecolor().copy(), col.get_edgecolor().copy())
+                         for col in ax.collections],
+        "legend":       None,
+    }
+    leg = ax.get_legend()
+    if leg:
+        state["legend"] = {
+            "facecolor": leg.get_frame().get_facecolor(),
+            "edgecolor": leg.get_frame().get_edgecolor(),
+            "text_colors": [t.get_color() for t in leg.get_texts()],
+        }
+    return state
+
+
+def _restore(ax, state: dict):
+    ax.set_facecolor(state["facecolor"])
+    ax.xaxis.label.set_color(state["xlabel_color"])
+    ax.yaxis.label.set_color(state["ylabel_color"])
+    ax.title.set_color(state["title_color"])
+
+    for tick in ax.xaxis.get_major_ticks():
+        tick.tick1line.set_color(state["xtick_color"])
+        tick.tick2line.set_color(state["xtick_color"])
+        tick.label1.set_color(state["xticklab_color"])
+    for tick in ax.yaxis.get_major_ticks():
+        tick.tick1line.set_color(state["ytick_color"])
+        tick.tick2line.set_color(state["ytick_color"])
+        tick.label1.set_color(state["yticklab_color"])
+
+    for k, (ec, lw) in state["spines"].items():
+        ax.spines[k].set_edgecolor(ec)
+        ax.spines[k].set_linewidth(lw)
+
+    for gl, col, alpha, lw in state["gridlines"]:
+        gl.set_color(col)
+        gl.set_alpha(alpha)
+        gl.set_linewidth(lw)
+
+    for ln, col, lw in state["lines"]:
+        ln.set_color(col)
+        ln.set_linewidth(lw)
+
+    for col, fc, ec in state["collections"]:
+        col.set_facecolor(fc)
+        col.set_edgecolor(ec)
+
+    leg = ax.get_legend()
+    if leg and state["legend"]:
+        s = state["legend"]
+        leg.get_frame().set_facecolor(s["facecolor"])
+        leg.get_frame().set_edgecolor(s["edgecolor"])
+        for t, c in zip(leg.get_texts(), s["text_colors"]):
+            t.set_color(c)
+
+
+def save_for_paper(fig, path: str, dpi: int = 300):
+    """
+    Save *fig* to *path* with a white background and print-safe colors,
+    then restore the original on-screen appearance.
+    """
+    import numpy as np
+
+    orig_fig_face = fig.get_facecolor()
+    axes_states = [_capture(ax) for ax in fig.axes]
+
+    try:
+        # ── Apply paper style ────────────────────────────────────────────────
+        fig.patch.set_facecolor("white")
+
+        for ax in fig.axes:
+            ax.set_facecolor("white")
+            ax.xaxis.label.set_color("black")
+            ax.yaxis.label.set_color("black")
+            ax.title.set_color("black")
+
+            for tick in ax.xaxis.get_major_ticks() + ax.yaxis.get_major_ticks():
+                tick.tick1line.set_color("black")
+                tick.tick2line.set_color("black")
+                tick.label1.set_color("black")
+
+            for spine in ax.spines.values():
+                spine.set_edgecolor("black")
+                spine.set_linewidth(0.8)
+
+            for gl in ax.xaxis.get_gridlines() + ax.yaxis.get_gridlines():
+                gl.set_color("#BBBBBB")
+                gl.set_alpha(0.9)
+                gl.set_linewidth(0.7)
+
+            for ln in ax.lines:
+                ln.set_color(_paper_color(ln.get_color()))
+
+            # Scatter / PathCollection face+edge colors
+            for col in ax.collections:
+                fc = col.get_facecolor()
+                ec = col.get_edgecolor()
+                if fc is not None and len(fc):
+                    col.set_facecolor([_paper_color(c) for c in fc])
+                if ec is not None and len(ec):
+                    new_ec = [_paper_color(c) for c in ec]
+                    col.set_edgecolor(new_ec)
+
+            leg = ax.get_legend()
+            if leg:
+                leg.get_frame().set_facecolor("white")
+                leg.get_frame().set_edgecolor("#AAAAAA")
+                for t in leg.get_texts():
+                    t.set_color("black")
+
+        # ── Save ─────────────────────────────────────────────────────────────
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        fig.savefig(path, facecolor="white", dpi=dpi, bbox_inches="tight")
+
+    finally:
+        # ── Always restore on-screen style ───────────────────────────────────
+        fig.patch.set_facecolor(orig_fig_face)
+        for ax, state in zip(fig.axes, axes_states):
+            _restore(ax, state)
+        fig.canvas.draw_idle()
+

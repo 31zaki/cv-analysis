@@ -1,9 +1,10 @@
 import os
+import re
 import numpy as np
 from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QSpinBox, QComboBox,
     QHBoxLayout, QVBoxLayout, QCheckBox, QFileDialog,
-    QWidget, QGridLayout, QFrame
+    QWidget, QGridLayout
 )
 from PyQt5.QtCore import Qt
 
@@ -16,14 +17,20 @@ from src.core.peak_detection import smooth
 import src.analysis.peak_analysis as peak_analysis
 
 PRESETS = {
-    "Click Chemistry":  [105, 300, 560, 750],
-    "Metallic Glass":   [105, 300, 560, 750],
-    "EDC-NHS":          [150, 420, 820, 1080],
-    "HATU":             [200, 400, 700, 900],
+    "Click Chemistry": [105, 300, 560, 750],
+    "Metallic Glass":  [105, 300, 560, 750],
+    "EDC-NHS":         [150, 420, 820, 1080],
+    "HATU":            [200, 400, 700, 900],
 }
 
 _POINT_COLORS = [ACCENT, ACCENT, ORANGE, ORANGE]
 _POINT_LABELS = ["P1  ox-start", "P2  ox-end", "P3  red-start", "P4  red-end"]
+
+
+def _parse_device(file_path: str) -> str:
+    stem = os.path.splitext(os.path.basename(file_path))[0]
+    stem = re.sub(r"_\d+mVs.*$", "", stem, flags=re.IGNORECASE)
+    return stem.strip("_") or stem
 
 
 class PeakPanel(BasePanel):
@@ -34,13 +41,11 @@ class PeakPanel(BasePanel):
         self._build_config()
         self._setup_canvas()
 
-    # ── Interactive canvas in plot area ──────────────────────────────────────
     def _setup_canvas(self):
         self._icanvas = InteractiveCanvas()
         self._icanvas.points_changed.connect(self._on_points_changed)
         self.plot_tabs.addTab(self._icanvas, "CV Preview")
 
-    # ── Config panel ─────────────────────────────────────────────────────────
     def _build_config(self):
         # ── File ─────────────────────────────────────────────────────────────
         self.add_section_title("Input File")
@@ -52,25 +57,19 @@ class PeakPanel(BasePanel):
         browse_btn.setObjectName("SecondaryBtn")
         browse_btn.setFixedWidth(80)
         browse_btn.clicked.connect(self._browse_file)
-        row = QHBoxLayout()
-        row.setSpacing(6)
-        row.addWidget(self._file_edit)
-        row.addWidget(browse_btn)
+        row = QHBoxLayout(); row.setSpacing(6)
+        row.addWidget(self._file_edit); row.addWidget(browse_btn)
         fc_layout.addLayout(row)
 
-        # curve index + smoothing inline
         ci_row = QHBoxLayout()
         ci_row.addWidget(QLabel("Curve index"))
         self._curve_idx = QSpinBox()
-        self._curve_idx.setRange(0, 20)
-        self._curve_idx.setValue(1)
+        self._curve_idx.setRange(0, 20); self._curve_idx.setValue(1)
         self._curve_idx.setFixedWidth(60)
         self._curve_idx.setToolTip("0 = first CURVE TABLE, 1 = second (typical)")
-        ci_row.addWidget(self._curve_idx)
-        ci_row.addStretch()
+        ci_row.addWidget(self._curve_idx); ci_row.addStretch()
         self._smooth_chk = QCheckBox("Smooth")
         self._smooth_chk.setChecked(True)
-        self._smooth_chk.setToolTip("Savitzky-Golay smoothing")
         ci_row.addWidget(self._smooth_chk)
         fc_layout.addLayout(ci_row)
 
@@ -81,24 +80,29 @@ class PeakPanel(BasePanel):
         fc_layout.addWidget(self._load_btn)
         self.config_layout.addWidget(file_card)
 
-        # ── Preset ───────────────────────────────────────────────────────────
+        # ── Experiment + Device ───────────────────────────────────────────────
         self.add_separator()
-        self.add_section_title("Experiment Preset")
-        preset_card, preset_layout = self.card()
-        hint = QLabel("Auto-fills baseline on load")
-        hint.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
+        self.add_section_title("Experiment")
+        exp_card, exp_layout = self.card()
+
+        exp_layout.addWidget(QLabel("Type"))
         self._preset_combo = QComboBox()
         self._preset_combo.addItems(list(PRESETS.keys()))
-        preset_layout.addWidget(hint)
-        preset_layout.addWidget(self._preset_combo)
-        self.config_layout.addWidget(preset_card)
+        self._preset_combo.currentTextChanged.connect(self._update_output_preview)
+        exp_layout.addWidget(self._preset_combo)
+
+        exp_layout.addWidget(QLabel("Device name"))
+        self._device_edit = QLineEdit()
+        self._device_edit.setPlaceholderText("auto-detected from filename")
+        self._device_edit.textChanged.connect(self._update_output_preview)
+        exp_layout.addWidget(self._device_edit)
+        self.config_layout.addWidget(exp_card)
 
         # ── Baseline point selection ──────────────────────────────────────────
         self.add_separator()
         self.add_section_title("Baseline Points")
         sel_card, sel_layout = self.card()
 
-        # Toggle selection mode button
         self._sel_btn = QPushButton("  ✦  Click to Select Points  (0 / 4)")
         self._sel_btn.setCheckable(True)
         self._sel_btn.setObjectName("SecondaryBtn")
@@ -107,48 +111,51 @@ class PeakPanel(BasePanel):
         self._sel_btn.setEnabled(False)
         sel_layout.addWidget(self._sel_btn)
 
-        clr_pts = QPushButton("Clear selection")
-        clr_pts.setObjectName("DangerBtn")
-        clr_pts.clicked.connect(self._clear_selection)
-        clr_pts.setEnabled(False)
-        self._clr_pts_btn = clr_pts
-        sel_layout.addWidget(clr_pts)
+        self._clr_pts_btn = QPushButton("Clear selection")
+        self._clr_pts_btn.setObjectName("DangerBtn")
+        self._clr_pts_btn.clicked.connect(self._clear_selection)
+        self._clr_pts_btn.setEnabled(False)
+        sel_layout.addWidget(self._clr_pts_btn)
 
-        # Point display grid
         self._pt_labels: list[QLabel] = []
-        grid = QGridLayout()
-        grid.setSpacing(4)
-        grid.setColumnStretch(1, 1)
+        grid = QGridLayout(); grid.setSpacing(4); grid.setColumnStretch(1, 1)
         for i in range(4):
             dot = QLabel("●")
             dot.setStyleSheet(f"color: {_POINT_COLORS[i]}; font-size: 14px;")
-            lbl_name = QLabel(_POINT_LABELS[i])
-            lbl_name.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
+            name_lbl = QLabel(_POINT_LABELS[i])
+            name_lbl.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
             val_lbl = QLabel("—")
             val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             val_lbl.setStyleSheet("font-size: 11px; font-family: Consolas;")
-            grid.addWidget(dot,      i, 0)
-            grid.addWidget(lbl_name, i, 1)
-            grid.addWidget(val_lbl,  i, 2)
+            grid.addWidget(dot, i, 0); grid.addWidget(name_lbl, i, 1); grid.addWidget(val_lbl, i, 2)
             self._pt_labels.append(val_lbl)
         sel_layout.addLayout(grid)
         self.config_layout.addWidget(sel_card)
 
-        # ── Output dir ────────────────────────────────────────────────────────
+        # ── Auto output preview ───────────────────────────────────────────────
         self.add_separator()
-        self.add_section_title("Output (optional)")
+        self.add_section_title("Output Directory")
         out_card, out_layout = self.card()
-        self._out_edit = QLineEdit()
-        self._out_edit.setPlaceholderText("Save figures to folder…")
-        out_btn = QPushButton("Browse")
-        out_btn.setObjectName("SecondaryBtn")
-        out_btn.setFixedWidth(80)
-        out_btn.clicked.connect(self._browse_output)
-        out_row = QHBoxLayout()
-        out_row.setSpacing(6)
-        out_row.addWidget(self._out_edit)
-        out_row.addWidget(out_btn)
-        out_layout.addLayout(out_row)
+
+        base_row = QHBoxLayout(); base_row.setSpacing(6)
+        self._base_dir_edit = QLineEdit()
+        self._base_dir_edit.setPlaceholderText("Base output folder…")
+        self._base_dir_edit.setText(
+            os.path.join(os.path.expanduser("~"), "cv_output")
+        )
+        self._base_dir_edit.textChanged.connect(self._update_output_preview)
+        base_btn = QPushButton("Change")
+        base_btn.setObjectName("SecondaryBtn"); base_btn.setFixedWidth(70)
+        base_btn.clicked.connect(self._browse_base_output)
+        base_row.addWidget(self._base_dir_edit); base_row.addWidget(base_btn)
+        out_layout.addLayout(base_row)
+
+        self._out_preview = QLabel("—")
+        self._out_preview.setStyleSheet(
+            f"color: {TEXT_DIM}; font-size: 10px; font-family: Consolas;"
+        )
+        self._out_preview.setWordWrap(True)
+        out_layout.addWidget(self._out_preview)
         self.config_layout.addWidget(out_card)
 
         # ── Run ───────────────────────────────────────────────────────────────
@@ -164,74 +171,75 @@ class PeakPanel(BasePanel):
         self.config_layout.addWidget(clr_all)
         self.config_layout.addStretch()
 
-    # ── Slots ────────────────────────────────────────────────────────────────
+    # ── Output path preview ──────────────────────────────────────────────────
+    def _update_output_preview(self):
+        base = self._base_dir_edit.text().strip()
+        exp  = self._preset_combo.currentText()
+        dev  = self._device_edit.text().strip() or "device"
+        if base:
+            preview = os.path.join(base,
+                                   re.sub(r"[^a-zA-Z0-9_\-]", "_", exp).strip("_"),
+                                   re.sub(r"[^a-zA-Z0-9_\-]", "_", dev).strip("_"))
+            self._out_preview.setText(preview)
+        else:
+            self._out_preview.setText("—")
+
+    def _browse_base_output(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Base Output Folder")
+        if d:
+            self._base_dir_edit.setText(d)
+
+    # ── File load ────────────────────────────────────────────────────────────
     def _browse_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open DTA File", "", "DTA Files (*.DTA *.dta)"
-        )
+            self, "Open DTA File", "", "DTA Files (*.DTA *.dta)")
         if path:
             self._file_edit.setText(path)
-
-    def _browse_output(self):
-        d = QFileDialog.getExistingDirectory(self, "Select Output Folder")
-        if d:
-            self._out_edit.setText(d)
+            detected = _parse_device(path)
+            self._device_edit.setText(detected)
+            self._update_output_preview()
 
     def _load_cv(self):
         path = self._file_edit.text().strip()
         if not path or not os.path.isfile(path):
-            self.log_msg("Please browse for a .DTA file first.", "warn")
-            return
+            self.log_msg("Please browse for a .DTA file first.", "warn"); return
         try:
             v, c_raw = load_curve(path, self._curve_idx.value())
-            if self._smooth_chk.isChecked():
-                c = smooth(np.asarray(c_raw, dtype=float))
-            else:
-                c = np.asarray(c_raw, dtype=float)
-            self._voltage = v
-            self._current = c
+            c = smooth(np.asarray(c_raw, dtype=float)) if self._smooth_chk.isChecked() \
+                else np.asarray(c_raw, dtype=float)
+            self._voltage, self._current = v, c
             self._icanvas.set_data(v, c)
             self._sel_btn.setEnabled(True)
             self._sel_btn.setText("  ✦  Click to Select Points  (0 / 4)")
+            self.plot_tabs.setCurrentIndex(0)
             self.log_msg(f"Loaded: {os.path.basename(path)}", "success")
             self.log_msg(f"  {len(v)} data points  |  curve index {self._curve_idx.value()}", "info")
-
-            # Switch to CV Preview tab
-            self.plot_tabs.setCurrentIndex(0)
-
-            # Auto-apply preset baseline (visual preview only)
-            preset = self._preset_combo.currentText()
-            if preset in PRESETS:
-                pts = PRESETS[preset]
-                self.log_msg(f"Preset '{preset}': suggested indices {pts}", "info")
-                self.log_msg("Click 'Click to Select Points' to pick baseline interactively.", "accent")
+            self.log_msg(f"Preset '{self._preset_combo.currentText()}': "
+                         f"suggested indices {PRESETS[self._preset_combo.currentText()]}", "info")
+            self.log_msg("Click 'Click to Select Points' to pick baseline interactively.", "accent")
         except Exception as e:
             self.log_msg(f"Error loading file: {e}", "error")
 
+    # ── Selection ────────────────────────────────────────────────────────────
     def _toggle_selection(self, checked: bool):
         if self._voltage is None:
-            self._sel_btn.setChecked(False)
-            return
+            self._sel_btn.setChecked(False); return
         self._icanvas.set_selection_mode(checked)
+        n = len(self._icanvas.selected_indices)
         if checked:
-            n = len(self._icanvas.selected_indices)
             self._sel_btn.setText(f"  ✦  Selecting…  ({n} / 4)   — click to cancel")
             self.plot_tabs.setCurrentIndex(0)
         else:
-            n = len(self._icanvas.selected_indices)
             self._sel_btn.setText(f"  ✦  Click to Select Points  ({n} / 4)")
 
     def _on_points_changed(self, indices: list):
         n = len(indices)
-
-        # Update the button text (keep checked state consistent)
         if self._sel_btn.isChecked() and n < 4:
             self._sel_btn.setText(f"  ✦  Selecting…  ({n} / 4)   — click to cancel")
         else:
             self._sel_btn.setText(f"  ✦  Click to Select Points  ({n} / 4)")
             self._sel_btn.setChecked(False)
 
-        # Update point display labels
         v = np.asarray(self._voltage, dtype=float) if self._voltage is not None else None
         for i, lbl in enumerate(self._pt_labels):
             if i < n:
@@ -245,7 +253,6 @@ class PeakPanel(BasePanel):
 
         self._clr_pts_btn.setEnabled(n > 0)
         self._run_btn.setEnabled(n == 4)
-
         if n == 4:
             self.log_msg(f"✓ 4 points selected: {indices}", "success")
             self.log_msg("Ready — click 'Run Analysis'.", "accent")
@@ -257,20 +264,27 @@ class PeakPanel(BasePanel):
         self._run_btn.setEnabled(False)
         self._clr_pts_btn.setEnabled(False)
 
+    # ── Run ──────────────────────────────────────────────────────────────────
     def _run(self):
         file_path = self._file_edit.text().strip()
-        indices = self._icanvas.selected_indices
+        indices   = self._icanvas.selected_indices
         if len(indices) != 4:
-            self.log_msg("Select exactly 4 baseline points first.", "warn")
-            return
+            self.log_msg("Select exactly 4 baseline points first.", "warn"); return
 
-        pts = sorted(indices[:2]) + sorted(indices[2:])
-        out_dir = self._out_edit.text().strip() or None
-        label = os.path.splitext(os.path.basename(file_path))[0]
+        pts      = sorted(indices[:2]) + sorted(indices[2:])
+        exp_type = self._preset_combo.currentText()
+        device   = self._device_edit.text().strip() or _parse_device(file_path)
+        base_out = self._base_dir_edit.text().strip() or None
 
         self.log_clear()
-        self.log_msg(f"File:   {os.path.basename(file_path)}", "info")
-        self.log_msg(f"Points: {pts}", "info")
+        self.log_msg(f"File:        {os.path.basename(file_path)}", "info")
+        self.log_msg(f"Experiment:  {exp_type}  |  Device: {device}", "info")
+        self.log_msg(f"Points:      {pts}", "info")
+        if base_out:
+            out_dir = os.path.join(base_out,
+                                   re.sub(r"[^a-zA-Z0-9_\-]", "_", exp_type).strip("_"),
+                                   re.sub(r"[^a-zA-Z0-9_\-]", "_", device).strip("_"))
+            self.log_msg(f"Saving to:   {out_dir}", "info")
         self.log_msg("Running…", "accent")
         self._run_btn.setEnabled(False)
 
@@ -279,28 +293,23 @@ class PeakPanel(BasePanel):
             file_path, pts,
             curve_index=self._curve_idx.value(),
             apply_smoothing=self._smooth_chk.isChecked(),
-            output_dir=out_dir,
-            label=label,
+            experiment_type=exp_type,
+            device_name=device,
+            base_output_dir=base_out,
             on_finish=self._on_done,
             on_error=self._on_error,
         )
 
     def _on_done(self, result: dict):
         self._run_btn.setEnabled(True)
-        ox = result["peak_ox"]
-        red = result["peak_red"]
+        ox, red = result["peak_ox"], result["peak_red"]
         self.log_msg("Done.", "success")
-        self.log_msg(f"Oxidation  peak:  {ox[0]:.4f} V  |  {ox[1]:.3e} nA", "data")
-        self.log_msg(f"Reduction  peak:  {red[0]:.4f} V  |  {red[1]:.3e} nA", "data")
-
-        # Keep tab 0 (interactive canvas), replace tabs 1+
+        self.log_msg(f"Oxidation peak :  {ox[0]:.4f} V  |  {ox[1]:.3e} nA", "data")
+        self.log_msg(f"Reduction peak :  {red[0]:.4f} V  |  {red[1]:.3e} nA", "data")
         while self.plot_tabs.count() > 1:
             self.plot_tabs.removeTab(1)
         for fig, title in result["figures"]:
-            canvas = PlotCanvas(fig)
-            self.plot_tabs.addTab(canvas, title)
-
-        # Jump to the corrected-peaks tab
+            self.plot_tabs.addTab(PlotCanvas(fig), title)
         if self.plot_tabs.count() > 2:
             self.plot_tabs.setCurrentIndex(2)
 

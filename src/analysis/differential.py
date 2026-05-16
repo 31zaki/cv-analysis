@@ -1,85 +1,92 @@
 import os
 import re
 import numpy as np
+from scipy.signal import find_peaks
 from matplotlib.figure import Figure
 
 from src.core.data_loader import load_curve
 from src.core.peak_detection import smooth
 from src.ui.theme import apply_mpl_style, save_for_paper, PLOT_COLORS
 
-# Labels and colors for each scan segment
-_SEG_LABELS = ["Forward", "Reverse", "Forward 2", "Reverse 2"]
+_SEG_LABELS  = ["Forward", "Reverse", "Forward 2", "Reverse 2"]
 _PAPER_COLORS = ["#1565C0", "#C62828", "#2E7D32", "#C07000"]
 
 
+# ── Segment detection ─────────────────────────────────────────────────────────
 def _find_segments(v, c):
     """
-    Split CV data at voltage turning points.
+    Split CV at voltage turning points (VLIMIT1, VLIMIT2 …).
 
-    Returns list of (v_seg, c_seg, label) for each monotonic segment.
-    A 'turning point' is where dV changes sign (voltage reverses direction).
+    Uses scipy.signal.find_peaks on the voltage array so the detection is
+    robust regardless of step size.  Each returned segment is monotonic in V.
     """
-    dv = np.diff(v)
-    # Ignore tiny numerical noise: only count sign flips larger than 1% of range
-    tol = 0.01 * (v.max() - v.min())
-    sign = np.sign(dv)
-    sign[np.abs(dv) < tol] = 0  # treat near-zero steps as neutral
+    n = len(v)
+    v_range = v.max() - v.min()
+    # Turning points must be at least 10 % of the dataset apart and have
+    # at least 5 % of the voltage range as prominence.
+    min_dist   = max(10, n // 10)
+    prominence = v_range * 0.05
 
-    # Forward-fill zeros so we get clean sign transitions
-    for i in range(1, len(sign)):
-        if sign[i] == 0:
-            sign[i] = sign[i - 1]
+    peaks,   _ = find_peaks( v, distance=min_dist, prominence=prominence)
+    troughs, _ = find_peaks(-v, distance=min_dist, prominence=prominence)
+    turns = sorted(peaks.tolist() + troughs.tolist())
 
-    # Find indices where sign actually changes
-    changes = np.where(np.diff(sign) != 0)[0] + 1  # +1 → index in original array
-
-    # Build segments between consecutive turning points
-    boundaries = [0, *changes.tolist(), len(v)]
+    boundaries = [0] + turns + [n - 1]
     segments = []
     for k in range(len(boundaries) - 1):
-        s, e = boundaries[k], boundaries[k + 1]
-        seg_v, seg_c = v[s:e], c[s:e]
-        if len(seg_v) < 4:          # skip tiny edge artefacts
+        s = boundaries[k]
+        e = boundaries[k + 1] + 1          # include the turning-point sample
+        if e - s < 4:
             continue
         label = _SEG_LABELS[k] if k < len(_SEG_LABELS) else f"Segment {k + 1}"
-        segments.append((seg_v, seg_c, label))
+        segments.append((v[s:e], c[s:e], label))
+
+    # Fall-back: if no turns found return the whole sweep as one segment
+    if not segments:
+        segments = [(v, c, _SEG_LABELS[0])]
 
     return segments
 
 
 def _segment_didv(seg_v, seg_c, smooth_result=False):
     """
-    dI/dV for one monotonic segment using numpy.gradient.
-    Sign is always defined as dI / d(|V|) so forward and reverse are comparable.
+    dI/dV for one monotonic segment.
+
+    - numpy.gradient handles non-uniform spacing.
+    - Sign is normalised to d(I)/d(|V|) so both scan directions are
+      directly comparable (positive = current rising with |V|).
+    - Edge points (prone to one-sided-difference artefacts near the
+      turning point) are replaced by their nearest interior neighbour.
     """
-    # gradient handles monotonically increasing or decreasing v correctly,
-    # but we normalize by the scan direction so the sign is intuitive.
-    direction = 1 if seg_v[-1] > seg_v[0] else -1
-    didv = np.gradient(seg_c, seg_v) * direction   # always positive dV denominator
+    direction = 1 if seg_v[-1] >= seg_v[0] else -1
+    didv = np.gradient(seg_c, seg_v) * direction
+
+    # Suppress endpoint artefacts: replace first & last sample with
+    # the adjacent interior value
+    if len(didv) > 4:
+        didv[0]  = didv[1]
+        didv[-1] = didv[-2]
+
     if smooth_result:
         didv = smooth(didv)
     return didv
 
 
+# ── Public entry point ────────────────────────────────────────────────────────
 def run(file_path, curve_index=1, apply_smoothing=True,
         smooth_derivative=False, base_output_dir=None,
         experiment_type="differential", device_name=None):
     """
-    Compute dI/dV for each scan segment (forward / reverse) of a CV .DTA file.
-
-    Because CV voltage reverses direction, the data is split at turning points
-    before differentiation so each segment is monotonic.
+    Compute dI/dV per scan segment (forward / reverse) of a CV .DTA file.
     """
     voltage, current_raw = load_curve(file_path, curve_index)
-    v = np.asarray(voltage, dtype=float)
+    v = np.asarray(voltage,     dtype=float)
     c = np.asarray(current_raw, dtype=float)
 
     if apply_smoothing:
         c = smooth(c)
 
     segments = _find_segments(v, c)
-    if not segments:
-        raise ValueError("Could not detect scan segments — check curve index.")
 
     results = []
     for seg_v, seg_c, label in segments:
@@ -106,20 +113,20 @@ def _screen_fig(results, title):
     apply_mpl_style()
     fig = Figure(figsize=(9, 8))
 
-    # Top: raw CV (all segments, coloured by direction)
     ax1 = fig.add_subplot(211)
     for k, r in enumerate(results):
-        color = PLOT_COLORS[k % len(PLOT_COLORS)]
-        ax1.plot(r["v"], r["c"], color=color, linewidth=1.6, label=r["label"])
+        ax1.plot(r["v"], r["c"],
+                 color=PLOT_COLORS[k % len(PLOT_COLORS)],
+                 linewidth=1.6, label=r["label"])
     ax1.set_ylabel("Current  (nA)", fontsize=12)
     ax1.set_title(title, fontsize=11)
     ax1.legend(fontsize=10)
 
-    # Bottom: dI/dV per segment
     ax2 = fig.add_subplot(212, sharex=ax1)
     for k, r in enumerate(results):
-        color = PLOT_COLORS[k % len(PLOT_COLORS)]
-        ax2.plot(r["v"], r["didv"], color=color, linewidth=1.6, label=r["label"])
+        ax2.plot(r["v"], r["didv"],
+                 color=PLOT_COLORS[k % len(PLOT_COLORS)],
+                 linewidth=1.6, label=r["label"])
     ax2.axhline(0, color="#707A8C", linewidth=0.8, linestyle="--")
     ax2.set_xlabel("Potential  (V)", fontsize=12)
     ax2.set_ylabel("dI/dV  (nA V⁻¹)", fontsize=12)

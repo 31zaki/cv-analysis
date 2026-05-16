@@ -152,15 +152,15 @@ class DiffPanel(BasePanel):
 
     def _on_done(self, result: dict):
         self._run_btn.setEnabled(True)
-        didv = result["didv"]
-        v    = result["voltage"]
-        peak_idx = int(didv.argmax())
-        trough_idx = int(didv.argmin())
-        self.log_msg("Done.", "success")
-        self.log_msg(
-            f"  dI/dV max:  {didv[peak_idx]:.4e} nA/V  at  {v[peak_idx]:.3f} V", "data")
-        self.log_msg(
-            f"  dI/dV min:  {didv[trough_idx]:.4e} nA/V  at  {v[trough_idx]:.3f} V", "data")
+        self.log_msg(f"Done — {len(result['segments'])} segment(s) detected.", "success")
+        for seg in result["segments"]:
+            didv, v = seg["didv"], seg["v"]
+            pk  = int(didv.argmax())
+            tr  = int(didv.argmin())
+            self.log_msg(
+                f"  [{seg['label']}]  "
+                f"max {didv[pk]:.3e} nA/V @ {v[pk]:.3f} V  |  "
+                f"min {didv[tr]:.3e} nA/V @ {v[tr]:.3f} V", "data")
         self.show_figures(result["figures"])
 
     def _on_error(self, msg: str):

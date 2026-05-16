@@ -5,11 +5,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from src.ui.sidebar import Sidebar
-from src.ui.panels.home_panel         import HomePanel
-from src.ui.panels.peak_panel         import PeakPanel
-from src.ui.panels.scan_speed_panel   import ScanSpeedPanel
+from src.ui.panels.home_panel            import HomePanel
+from src.ui.panels.peak_panel            import PeakPanel
+from src.ui.panels.scan_speed_panel      import ScanSpeedPanel
 from src.ui.panels.electrografting_panel import ElectrograftingPanel
-from src.ui.panels.efficiency_panel   import EfficiencyPanel
+from src.ui.panels.efficiency_panel      import EfficiencyPanel
+from src.ui.panels.diff_panel            import DiffPanel
 
 
 class MainWindow(QMainWindow):
@@ -38,6 +39,7 @@ class MainWindow(QMainWindow):
             ScanSpeedPanel(),
             ElectrograftingPanel(),
             EfficiencyPanel(),
+            DiffPanel(),
         ]
         for panel in self._panels:
             self.stack.addWidget(panel)

@@ -9,6 +9,7 @@ NAV_ITEMS = [
     ("≋",  "Scan Speed"),
     ("∿",  "Electrografting"),
     ("◎",  "Efficiency"),
+    ("∂",  "Differential"),
 ]
 
 

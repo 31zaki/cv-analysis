@@ -2,18 +2,17 @@ import os
 import re
 import math
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from src.core.data_loader import load_all_curves
 from src.ui.theme import apply_mpl_style, save_for_paper, PLOT_COLORS
 
-_CYCLE_LABELS = ["1st Cycle", "2nd Cycle", "3rd Cycle", "4th Cycle", "5th Cycle"]
-_PAPER_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd"]
-
 
 def _sanitize(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_\-]", "_", name).strip("_")
+
+
+_CYCLE_LABELS = ["1st Cycle", "2nd Cycle", "3rd Cycle", "4th Cycle", "5th Cycle"]
 
 
 def run(data_dir, max_cycles=3, experiment_type="electrografting", base_output_dir=None):
@@ -32,33 +31,28 @@ def run(data_dir, max_cycles=3, experiment_type="electrografting", base_output_d
         except Exception as e:
             per_file.append({"label": label, "error": str(e), "figure": None, "curves": []}); continue
 
-        # Screen figure (Ayu dark)
-        fig = _single_fig(curves, label, paper=False)
+        fig = _single_fig(curves, label)
         per_file.append({"label": label, "figure": fig, "error": None, "curves": curves})
 
-        # Paper save — per device subfolder
         if base_output_dir:
-            dev = _sanitize(re.match(r"^[A-Za-z0-9]+", label).group()) if re.match(r"^[A-Za-z0-9]+", label) else _sanitize(label)
+            m = re.match(r"^[A-Za-z0-9]+", label)
+            dev = _sanitize(m.group()) if m else _sanitize(label)
             out = os.path.join(base_output_dir, _sanitize(experiment_type), dev)
             os.makedirs(out, exist_ok=True)
-            pfig = _single_fig(curves, label, paper=True)
-            save_for_paper(pfig, os.path.join(out, f"{_sanitize(label)}_electrografting.png"))
-            plt.close(pfig)
+            save_for_paper(fig, os.path.join(out, f"{_sanitize(label)}_electrografting.png"))
 
-    # Grid figure (screen only — overview, not exported individually)
     grid_fig = _grid_figure(per_file)
-
     return {"per_file": per_file, "grid_figure": grid_fig}
 
 
-def _single_fig(curves, label, paper=False):
-    colors = _PAPER_COLORS if paper else PLOT_COLORS
+def _single_fig(curves, label):
+    apply_mpl_style()
     fig = Figure(figsize=(8, 5))
-    ax = fig.add_subplot(111)
+    ax  = fig.add_subplot(111)
     for i, (v, c) in enumerate(curves):
         lbl = _CYCLE_LABELS[i] if i < len(_CYCLE_LABELS) else f"Cycle {i + 1}"
         ax.plot(np.asarray(v, dtype=float), np.asarray(c, dtype=float),
-                color=colors[i % len(colors)], linewidth=1.8, label=lbl)
+                color=PLOT_COLORS[i % len(PLOT_COLORS)], linewidth=1.8, label=lbl)
     ax.set_xlabel("Potential (V)", fontsize=13)
     ax.set_ylabel("Current (nA)", fontsize=13)
     ax.set_title(label, fontsize=12)
@@ -79,11 +73,10 @@ def _grid_figure(per_file):
     for i, r in enumerate(valid):
         row, col = divmod(i, cols)
         ax = axes[row][col]
-        for v, c in r["curves"]:
-            src_lines = r["figure"].axes[0].lines
-            for j, ln in enumerate(src_lines):
-                ax.plot(ln.get_xdata(), ln.get_ydata(),
-                        color=ln.get_color(), linewidth=1.4, label=ln.get_label())
+        src_lines = r["figure"].axes[0].lines
+        for ln in src_lines:
+            ax.plot(ln.get_xdata(), ln.get_ydata(),
+                    color=ln.get_color(), linewidth=1.4, label=ln.get_label())
         ax.set_title(r["label"], fontsize=10)
         ax.set_xlabel("Potential (V)", fontsize=9)
         ax.set_ylabel("Current (nA)", fontsize=9)

@@ -2,7 +2,6 @@ import os
 import re
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from src.ui.theme import apply_mpl_style, save_for_paper, PLOT_COLORS
@@ -20,11 +19,6 @@ def _sanitize(name: str) -> str:
 
 def run(csv_path, reaction_type="Click Chemistry",
         experiment_type="efficiency", base_output_dir=None):
-    """
-    Efficiency correlation: grafting charge vs reaction charge.
-    Saves paper-quality figures to:
-        base_output_dir / experiment_type / reaction_type /
-    """
     apply_mpl_style()
 
     if reaction_type not in REACTION_COLUMNS:
@@ -68,25 +62,21 @@ def run(csv_path, reaction_type="Click Chemistry",
         "n_filtered": len(eff_f),
     }
 
-    # Screen figures (Ayu dark)
-    screen_figs = _make_screen_figures(graft, react, eff, reaction_type, stats)
+    figs = _make_figures(graft, react, eff, reaction_type, stats)
 
-    # Paper save
     if base_output_dir:
         out = os.path.join(base_output_dir,
                            _sanitize(experiment_type),
                            _sanitize(reaction_type))
         os.makedirs(out, exist_ok=True)
-        for pfig, stem in _make_paper_figures(graft, react, eff, reaction_type, stats):
-            save_for_paper(pfig, os.path.join(out, f"{_sanitize(reaction_type)}_{stem}.png"))
-            pfig.clf()
-            plt.close("all")
+        stems = ["grafting_vs_reaction", "efficiency_boxplot"]
+        for (fig, _), stem in zip(figs, stems):
+            save_for_paper(fig, os.path.join(out, f"{_sanitize(reaction_type)}_{stem}.png"))
 
-    return {"stats": stats, "dataframe": df_v, "figures": screen_figs}
+    return {"stats": stats, "dataframe": df_v, "figures": figs}
 
 
-# ── Screen figures (Ayu dark) ─────────────────────────────────────────────────
-def _make_screen_figures(graft, react, eff, label, stats):
+def _make_figures(graft, react, eff, label, stats):
     apply_mpl_style()
     figs = []
 
@@ -94,71 +84,34 @@ def _make_screen_figures(graft, react, eff, label, stats):
     x_fit = np.linspace(graft.min(), graft.max(), 200)
 
     fig1 = Figure(figsize=(8, 5))
-    ax1 = fig1.add_subplot(111)
-    ax1.scatter(graft, react, color=PLOT_COLORS[1], s=60, zorder=5, label="Devices")
-    ax1.plot(x_fit, fit(x_fit), color=PLOT_COLORS[0], lw=1.5, ls="--", label="Linear fit")
+    ax1  = fig1.add_subplot(111)
+    ax1.scatter(graft, react, color=PLOT_COLORS[0], s=60, zorder=5, label="Devices")
+    ax1.plot(x_fit, fit(x_fit), color=PLOT_COLORS[1], lw=1.5, ls="--", label="Linear fit")
     ax1.set_xlabel("Grafting Charge (nC)", fontsize=13)
     ax1.set_ylabel(f"{label} Charge (nC)", fontsize=13)
     ax1.text(0.97, 0.97, f"n = {stats['n']}\nr = {stats['correlation']:.3f}",
              transform=ax1.transAxes, fontsize=11, va="top", ha="right",
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="#232834", edgecolor="#2D3444"))
+             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#CCCCCC"))
     ax1.legend(fontsize=11)
     fig1.tight_layout()
     figs.append((fig1, "Grafting vs Reaction"))
 
     fig2 = Figure(figsize=(6, 6))
-    ax2 = fig2.add_subplot(111)
+    ax2  = fig2.add_subplot(111)
     ax2.boxplot(eff, vert=True, patch_artist=True,
-                boxprops=dict(facecolor=PLOT_COLORS[1] + "55", edgecolor=PLOT_COLORS[1]),
-                medianprops=dict(color=PLOT_COLORS[0], linewidth=2),
-                whiskerprops=dict(color=PLOT_COLORS[1]),
-                capprops=dict(color=PLOT_COLORS[1]),
-                flierprops=dict(marker="o", color=PLOT_COLORS[3], markersize=5))
+                boxprops=dict(facecolor=PLOT_COLORS[0] + "33", edgecolor=PLOT_COLORS[0]),
+                medianprops=dict(color=PLOT_COLORS[1], linewidth=2),
+                whiskerprops=dict(color=PLOT_COLORS[0]),
+                capprops=dict(color=PLOT_COLORS[0]),
+                flierprops=dict(marker="o", color=PLOT_COLORS[2], markersize=5))
     ax2.set_ylabel("Efficiency (%)", fontsize=13)
     ax2.set_xticks([])
     ax2.text(0.97, 0.97,
              f"n = {stats['n']}\nmean = {stats['mean_eff_filtered']:.1f}%\n"
              f"std = {stats['std_eff_filtered']:.1f}%",
              transform=ax2.transAxes, fontsize=11, va="top", ha="right",
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="#232834", edgecolor="#2D3444"))
+             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#CCCCCC"))
     fig2.tight_layout()
     figs.append((fig2, "Efficiency (%)"))
+
     return figs
-
-
-# ── Paper figures (white bg, publication colors) ──────────────────────────────
-def _make_paper_figures(graft, react, eff, label, stats):
-    """Yields (fig, stem) pairs ready for save_for_paper."""
-    fit   = np.poly1d(np.polyfit(graft, react, 1))
-    x_fit = np.linspace(graft.min(), graft.max(), 200)
-
-    fig1 = Figure(figsize=(8, 5))
-    ax1 = fig1.add_subplot(111)
-    ax1.scatter(graft, react, color="#1565C0", s=60, zorder=5, label="Devices")
-    ax1.plot(x_fit, fit(x_fit), color="#C07000", lw=1.5, ls="--", label="Linear fit")
-    ax1.set_xlabel("Grafting Charge (nC)", fontsize=13)
-    ax1.set_ylabel(f"{label} Charge (nC)", fontsize=13)
-    ax1.text(0.97, 0.97, f"n = {stats['n']}\nr = {stats['correlation']:.3f}",
-             transform=ax1.transAxes, fontsize=11, va="top", ha="right",
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#AAAAAA"))
-    ax1.legend(fontsize=11)
-    fig1.tight_layout()
-    yield fig1, "grafting_vs_reaction"
-
-    fig2 = Figure(figsize=(6, 6))
-    ax2 = fig2.add_subplot(111)
-    ax2.boxplot(eff, vert=True, patch_artist=True,
-                boxprops=dict(facecolor="#BBDEFB", edgecolor="#1565C0"),
-                medianprops=dict(color="#C62828", linewidth=2),
-                whiskerprops=dict(color="#1565C0"),
-                capprops=dict(color="#1565C0"),
-                flierprops=dict(marker="o", color="#C62828", markersize=5))
-    ax2.set_ylabel("Efficiency (%)", fontsize=13)
-    ax2.set_xticks([])
-    ax2.text(0.97, 0.97,
-             f"n = {stats['n']}\nmean = {stats['mean_eff_filtered']:.1f}%\n"
-             f"std = {stats['std_eff_filtered']:.1f}%",
-             transform=ax2.transAxes, fontsize=11, va="top", ha="right",
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#AAAAAA"))
-    fig2.tight_layout()
-    yield fig2, "efficiency_boxplot"

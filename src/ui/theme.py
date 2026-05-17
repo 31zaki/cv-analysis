@@ -1,60 +1,79 @@
-"""Ayu Mirage color palette, QSS stylesheet, and matplotlib theme."""
+"""Ayu Light color palette, QSS stylesheet, and matplotlib theme."""
 from cycler import cycler
 import os
 
-# ── Palette ─────────────────────────────────────────────────────────────────
-BG_DEEP   = "#1A1F29"
-BG_MAIN   = "#1F2430"
-BG_PANEL  = "#232834"
-BG_INPUT  = "#272D3D"
-BORDER    = "#2D3444"
-TEXT      = "#CCCAC2"
-TEXT_DIM  = "#707A8C"
-TEXT_BRT  = "#F8F8F2"
-ACCENT    = "#FFCC66"
-BLUE      = "#73D0FF"
-GREEN     = "#A6CC70"
-RED       = "#F07178"
-ORANGE    = "#FFB454"
-PURPLE    = "#D4BFFF"
-CYAN      = "#5CCFE6"
+# ── Ayu Light Palette ────────────────────────────────────────────────────────
+BG_DEEP   = "#F0F1F2"   # sidebar / header
+BG_MAIN   = "#FAFAFA"   # app background
+BG_PANEL  = "#FFFFFF"   # cards / panels
+BG_INPUT  = "#FFFFFF"   # input fields
+BORDER    = "#D9DCE3"   # borders
+TEXT      = "#3D4350"   # primary text
+TEXT_DIM  = "#8B949E"   # secondary / placeholder text
+TEXT_BRT  = "#1A1F29"   # headings
+ACCENT    = "#399EE6"   # Ayu Light blue (entity / active)
+GREEN     = "#2E7D32"   # dark green (success)
+RED       = "#C62828"   # dark red (error / danger)
+ORANGE    = "#E65100"   # burnt orange (warning)
+PURPLE    = "#6A1B9A"   # deep purple
+CYAN      = "#00838F"   # deep teal
 
-PLOT_COLORS = [ACCENT, BLUE, GREEN, RED, ORANGE, PURPLE, CYAN, "#BAE67E"]
+# ── Plot colors — paper-quality, readable on white ───────────────────────────
+PLOT_COLORS = [
+    "#1565C0",  # deep blue
+    "#C62828",  # deep red
+    "#2E7D32",  # deep green
+    "#E65100",  # burnt orange
+    "#6A1B9A",  # deep purple
+    "#00838F",  # deep teal
+    "#F57F17",  # deep amber
+    "#37474F",  # blue-grey
+]
 
 
 def apply_mpl_style():
-    """Apply Ayu Mirage style to matplotlib globally."""
+    """Apply Ayu Light style to matplotlib (white background, paper-quality colors)."""
     import matplotlib.pyplot as plt
     plt.rcParams.update({
-        "figure.facecolor":  BG_PANEL,
-        "axes.facecolor":    BG_MAIN,
-        "axes.edgecolor":    BORDER,
-        "axes.labelcolor":   TEXT,
+        "figure.facecolor":  "white",
+        "axes.facecolor":    "white",
+        "axes.edgecolor":    "#CCCCCC",
+        "axes.labelcolor":   "#333333",
         "axes.prop_cycle":   cycler("color", PLOT_COLORS),
         "axes.grid":         True,
-        "grid.color":        BORDER,
+        "grid.color":        "#E5E5E5",
         "grid.linewidth":    0.8,
-        "grid.alpha":        0.6,
-        "text.color":        TEXT,
-        "xtick.color":       TEXT,
-        "ytick.color":       TEXT,
+        "grid.alpha":        1.0,
+        "text.color":        "#333333",
+        "xtick.color":       "#333333",
+        "ytick.color":       "#333333",
         "xtick.labelsize":   11,
         "ytick.labelsize":   11,
         "axes.labelsize":    13,
         "axes.titlesize":    13,
-        "axes.titlecolor":   TEXT_BRT,
-        "legend.facecolor":  BG_PANEL,
-        "legend.edgecolor":  BORDER,
-        "legend.labelcolor": TEXT,
+        "axes.titlecolor":   "#1A1F29",
+        "legend.facecolor":  "white",
+        "legend.edgecolor":  "#CCCCCC",
+        "legend.labelcolor": "#333333",
         "legend.fontsize":   10,
         "lines.linewidth":   1.8,
         "figure.autolayout": True,
-        "savefig.facecolor": BG_PANEL,
+        "savefig.facecolor": "white",
         "savefig.dpi":       150,
     })
 
 
-# ── Full QSS Stylesheet ──────────────────────────────────────────────────────
+def save_for_paper(fig, path: str, dpi: int = 300):
+    """
+    Save fig to path at high DPI.
+    Screen and paper styles are now identical (white background,
+    paper-quality colors) so no color conversion is needed.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    fig.savefig(path, facecolor="white", dpi=dpi, bbox_inches="tight")
+
+
+# ── Full QSS Stylesheet — Ayu Light ─────────────────────────────────────────
 STYLESHEET = f"""
 /* ===== Base ===== */
 QMainWindow, QDialog {{
@@ -65,7 +84,7 @@ QWidget {{
     color: {TEXT};
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: 13px;
-    selection-background-color: {ACCENT}44;
+    selection-background-color: {ACCENT}33;
     selection-color: {TEXT_BRT};
 }}
 
@@ -107,11 +126,11 @@ QWidget {{
     font-size: 13px;
 }}
 #NavButton:hover {{
-    background-color: {BG_PANEL};
+    background-color: {BORDER};
     color: {TEXT};
 }}
 #NavButton[active="true"] {{
-    background-color: {BG_PANEL};
+    background-color: {ACCENT}18;
     color: {ACCENT};
     border-left: 3px solid {ACCENT};
     padding-left: 9px;
@@ -120,7 +139,7 @@ QWidget {{
 
 /* ===== Panel Header ===== */
 #PanelHeader {{
-    background-color: {BG_DEEP};
+    background-color: {BG_PANEL};
     border-bottom: 1px solid {BORDER};
 }}
 #PageTitle {{
@@ -152,7 +171,7 @@ QWidget {{
 /* ===== Buttons ===== */
 QPushButton {{
     background-color: {ACCENT};
-    color: {BG_DEEP};
+    color: white;
     border: none;
     border-radius: 6px;
     padding: 8px 20px;
@@ -161,10 +180,10 @@ QPushButton {{
     min-height: 32px;
 }}
 QPushButton:hover {{
-    background-color: #FFD680;
+    background-color: #2D8FD6;
 }}
 QPushButton:pressed {{
-    background-color: #E6B84D;
+    background-color: #1A6EB0;
 }}
 QPushButton:disabled {{
     background-color: {BORDER};
@@ -172,13 +191,13 @@ QPushButton:disabled {{
 }}
 #SecondaryBtn {{
     background-color: transparent;
-    color: {BLUE};
-    border: 1px solid {BLUE}88;
+    color: {ACCENT};
+    border: 1px solid {ACCENT}99;
     font-weight: normal;
 }}
 #SecondaryBtn:hover {{
-    background-color: {BLUE}22;
-    border-color: {BLUE};
+    background-color: {ACCENT}18;
+    border-color: {ACCENT};
 }}
 #DangerBtn {{
     background-color: transparent;
@@ -187,15 +206,15 @@ QPushButton:disabled {{
     font-weight: normal;
 }}
 #DangerBtn:hover {{
-    background-color: {RED}22;
+    background-color: {RED}18;
     border-color: {RED};
 }}
 #GreenBtn {{
     background-color: {GREEN};
-    color: {BG_DEEP};
+    color: white;
 }}
 #GreenBtn:hover {{
-    background-color: #B8DC82;
+    background-color: #388E3C;
 }}
 
 /* ===== Inputs ===== */
@@ -209,21 +228,21 @@ QLineEdit, QSpinBox, QDoubleSpinBox {{
 }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
     border: 1px solid {ACCENT};
-    background-color: {BG_INPUT};
 }}
 QLineEdit:read-only {{
+    background-color: {BG_DEEP};
     color: {TEXT_DIM};
 }}
 QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
-    background-color: {BORDER};
+    background-color: {BG_DEEP};
     border: none;
     width: 18px;
     border-radius: 3px;
 }}
 QSpinBox::up-button:hover, QSpinBox::down-button:hover,
 QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{
-    background-color: {TEXT_DIM};
+    background-color: {BORDER};
 }}
 
 /* ===== ComboBox ===== */
@@ -241,7 +260,6 @@ QComboBox:focus {{
 QComboBox::drop-down {{
     border: none;
     width: 24px;
-    border-radius: 0 6px 6px 0;
 }}
 QComboBox::down-arrow {{
     border-left: 5px solid transparent;
@@ -252,7 +270,7 @@ QComboBox::down-arrow {{
 QComboBox QAbstractItemView {{
     background-color: {BG_PANEL};
     color: {TEXT};
-    selection-background-color: {ACCENT}44;
+    selection-background-color: {ACCENT}22;
     selection-color: {TEXT_BRT};
     border: 1px solid {BORDER};
     border-radius: 4px;
@@ -268,7 +286,7 @@ QCheckBox {{
 QCheckBox::indicator {{
     width: 16px;
     height: 16px;
-    border: 1px solid {BORDER};
+    border: 1.5px solid {BORDER};
     border-radius: 4px;
     background-color: {BG_INPUT};
 }}
@@ -283,7 +301,7 @@ QCheckBox::indicator:hover {{
 /* ===== Log Output ===== */
 #LogOutput {{
     background-color: {BG_DEEP};
-    color: {GREEN};
+    color: {TEXT};
     font-family: "Cascadia Code", "Consolas", monospace;
     font-size: 12px;
     border: 1px solid {BORDER};
@@ -315,15 +333,16 @@ QTabBar::tab:selected {{
     background-color: {BG_PANEL};
     color: {ACCENT};
     border-bottom: 1px solid {BG_PANEL};
+    font-weight: bold;
 }}
 QTabBar::tab:hover:!selected {{
-    background-color: {BG_PANEL};
+    background-color: {BORDER};
     color: {TEXT};
 }}
 
 /* ===== Scroll Bars ===== */
 QScrollBar:vertical {{
-    background-color: {BG_DEEP};
+    background-color: {BG_MAIN};
     width: 8px;
     border-radius: 4px;
     margin: 0;
@@ -338,7 +357,7 @@ QScrollBar::handle:vertical:hover {{
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
-    background-color: {BG_DEEP};
+    background-color: {BG_MAIN};
     height: 8px;
     border-radius: 4px;
     margin: 0;
@@ -377,20 +396,6 @@ QStatusBar {{
     padding: 0 8px;
 }}
 
-/* ===== Progress Bar ===== */
-QProgressBar {{
-    background-color: {BG_INPUT};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
-    height: 8px;
-    text-align: center;
-    color: transparent;
-}}
-QProgressBar::chunk {{
-    background-color: {ACCENT};
-    border-radius: 4px;
-}}
-
 /* ===== Tooltip ===== */
 QToolTip {{
     background-color: {BG_PANEL};
@@ -409,7 +414,7 @@ QFrame[frameShape="4"], QFrame[frameShape="5"] {{
 
 /* ===== Matplotlib NavigationToolbar ===== */
 NavigationToolbar2QT {{
-    background-color: {BG_PANEL};
+    background-color: {BG_DEEP};
     border-bottom: 1px solid {BORDER};
     spacing: 2px;
     padding: 2px;
@@ -425,171 +430,7 @@ NavigationToolbar2QT QToolButton:hover {{
     background-color: {BORDER};
 }}
 NavigationToolbar2QT QToolButton:checked {{
-    background-color: {ACCENT}44;
+    background-color: {ACCENT}22;
     color: {ACCENT};
 }}
 """
-
-# ── Paper-export color map: Ayu Mirage → print-friendly darks ───────────────
-# Keys are lowercase hex; values are darker equivalents readable on white.
-_PAPER_COLOR_MAP: dict[str, str] = {
-    "#73d0ff": "#1565C0",   # BLUE       → dark blue
-    "#ffcc66": "#C07000",   # ACCENT     → dark amber
-    "#a6cc70": "#2E7D32",   # GREEN      → dark green
-    "#f07178": "#C62828",   # RED        → dark red
-    "#ffb454": "#E65100",   # ORANGE     → burnt orange
-    "#d4bfff": "#6A1B9A",   # PURPLE     → dark purple
-    "#5ccfe6": "#00838F",   # CYAN       → dark teal
-    "#bae67e": "#558B2F",   # LIME       → dark lime
-}
-
-
-def _paper_color(c) -> str:
-    """Map an Ayu screen color to its paper-export equivalent."""
-    import matplotlib.colors as mcolors
-    try:
-        rgba = mcolors.to_rgba(c)
-        hex_c = mcolors.to_hex(rgba).lower()
-        return _PAPER_COLOR_MAP.get(hex_c, hex_c)
-    except Exception:
-        return c
-
-
-def _capture(ax) -> dict:
-    """Snapshot all color/style properties of an Axes for later restore."""
-    xticks = ax.xaxis.get_major_ticks()
-    yticks = ax.yaxis.get_major_ticks()
-    state = {
-        "facecolor":    ax.get_facecolor(),
-        "xlabel_color": ax.xaxis.label.get_color(),
-        "ylabel_color": ax.yaxis.label.get_color(),
-        "title_color":  ax.title.get_color(),
-        "xtick_color":  xticks[0].tick1line.get_color() if xticks else TEXT,
-        "ytick_color":  yticks[0].tick1line.get_color() if yticks else TEXT,
-        "xticklab_color": xticks[0].label1.get_color() if xticks else TEXT,
-        "yticklab_color": yticks[0].label1.get_color() if yticks else TEXT,
-        "spines":       {k: (v.get_edgecolor(), v.get_linewidth())
-                         for k, v in ax.spines.items()},
-        "gridlines":    [(gl, gl.get_color(), gl.get_alpha(), gl.get_linewidth())
-                         for gl in ax.xaxis.get_gridlines() + ax.yaxis.get_gridlines()],
-        "lines":        [(ln, ln.get_color(), ln.get_linewidth()) for ln in ax.lines],
-        "collections":  [(col, col.get_facecolor().copy(), col.get_edgecolor().copy())
-                         for col in ax.collections],
-        "legend":       None,
-    }
-    leg = ax.get_legend()
-    if leg:
-        state["legend"] = {
-            "facecolor": leg.get_frame().get_facecolor(),
-            "edgecolor": leg.get_frame().get_edgecolor(),
-            "text_colors": [t.get_color() for t in leg.get_texts()],
-        }
-    return state
-
-
-def _restore(ax, state: dict):
-    ax.set_facecolor(state["facecolor"])
-    ax.xaxis.label.set_color(state["xlabel_color"])
-    ax.yaxis.label.set_color(state["ylabel_color"])
-    ax.title.set_color(state["title_color"])
-
-    for tick in ax.xaxis.get_major_ticks():
-        tick.tick1line.set_color(state["xtick_color"])
-        tick.tick2line.set_color(state["xtick_color"])
-        tick.label1.set_color(state["xticklab_color"])
-    for tick in ax.yaxis.get_major_ticks():
-        tick.tick1line.set_color(state["ytick_color"])
-        tick.tick2line.set_color(state["ytick_color"])
-        tick.label1.set_color(state["yticklab_color"])
-
-    for k, (ec, lw) in state["spines"].items():
-        ax.spines[k].set_edgecolor(ec)
-        ax.spines[k].set_linewidth(lw)
-
-    for gl, col, alpha, lw in state["gridlines"]:
-        gl.set_color(col)
-        gl.set_alpha(alpha)
-        gl.set_linewidth(lw)
-
-    for ln, col, lw in state["lines"]:
-        ln.set_color(col)
-        ln.set_linewidth(lw)
-
-    for col, fc, ec in state["collections"]:
-        col.set_facecolor(fc)
-        col.set_edgecolor(ec)
-
-    leg = ax.get_legend()
-    if leg and state["legend"]:
-        s = state["legend"]
-        leg.get_frame().set_facecolor(s["facecolor"])
-        leg.get_frame().set_edgecolor(s["edgecolor"])
-        for t, c in zip(leg.get_texts(), s["text_colors"]):
-            t.set_color(c)
-
-
-def save_for_paper(fig, path: str, dpi: int = 300):
-    """
-    Save *fig* to *path* with a white background and print-safe colors,
-    then restore the original on-screen appearance.
-    """
-    import numpy as np
-
-    orig_fig_face = fig.get_facecolor()
-    axes_states = [_capture(ax) for ax in fig.axes]
-
-    try:
-        # ── Apply paper style ────────────────────────────────────────────────
-        fig.patch.set_facecolor("white")
-
-        for ax in fig.axes:
-            ax.set_facecolor("white")
-            ax.xaxis.label.set_color("black")
-            ax.yaxis.label.set_color("black")
-            ax.title.set_color("black")
-
-            for tick in ax.xaxis.get_major_ticks() + ax.yaxis.get_major_ticks():
-                tick.tick1line.set_color("black")
-                tick.tick2line.set_color("black")
-                tick.label1.set_color("black")
-
-            for spine in ax.spines.values():
-                spine.set_edgecolor("black")
-                spine.set_linewidth(0.8)
-
-            for gl in ax.xaxis.get_gridlines() + ax.yaxis.get_gridlines():
-                gl.set_color("#BBBBBB")
-                gl.set_alpha(0.9)
-                gl.set_linewidth(0.7)
-
-            for ln in ax.lines:
-                ln.set_color(_paper_color(ln.get_color()))
-
-            # Scatter / PathCollection face+edge colors
-            for col in ax.collections:
-                fc = col.get_facecolor()
-                ec = col.get_edgecolor()
-                if fc is not None and len(fc):
-                    col.set_facecolor([_paper_color(c) for c in fc])
-                if ec is not None and len(ec):
-                    new_ec = [_paper_color(c) for c in ec]
-                    col.set_edgecolor(new_ec)
-
-            leg = ax.get_legend()
-            if leg:
-                leg.get_frame().set_facecolor("white")
-                leg.get_frame().set_edgecolor("#AAAAAA")
-                for t in leg.get_texts():
-                    t.set_color("black")
-
-        # ── Save ─────────────────────────────────────────────────────────────
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        fig.savefig(path, facecolor="white", dpi=dpi, bbox_inches="tight")
-
-    finally:
-        # ── Always restore on-screen style ───────────────────────────────────
-        fig.patch.set_facecolor(orig_fig_face)
-        for ax, state in zip(fig.axes, axes_states):
-            _restore(ax, state)
-        fig.canvas.draw_idle()
-

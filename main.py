@@ -8,10 +8,11 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from src.ui.main_window import MainWindow
-from src.ui.theme import STYLESHEET
+from src.ui.theme import STYLESHEET, apply_mpl_style
 
 
 def main():
+    apply_mpl_style()   # set white-background matplotlib style globally at startup
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
